@@ -1,0 +1,1007 @@
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+#map-wrapper { display: flex; height: 620px; overflow: hidden; position: relative; }
+#map-wrapper.fullscreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; }
+#map-wrapper.fullscreen #map, #map-wrapper.fullscreen #panel { height: 100vh; }
+#map { flex: 1; height: 620px; }
+#panel { width: 460px; height: 620px; overflow-y: auto; background: #fff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; flex-shrink: 0; }
+#filters { padding: 10px 16px; border-bottom: 1px solid #e5e7eb; display: flex; gap: 6px; align-items: center; background: #fafafa; flex-wrap: wrap; }
+.filter-btn { font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: 20px; border: 1px solid #e5e7eb; background: #fff; color: #4c5260; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.filter-btn:hover { border-color: #e8500a; color: #e8500a; }
+.filter-btn.active { background: #e8500a; border-color: #e8500a; color: #fff; }
+#panel-default { padding: 20px 24px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+#panel-default h2 { font-size: 18px; font-weight: 600; color: #111; margin-bottom: 8px; }
+#panel-default p { font-size: 14px; color: #4c5260; line-height: 1.6; }
+.stat-row { display: flex; gap: 10px; margin-top: 18px; }
+.stat-box { flex: 1; background: #fff4ef; border-radius: 8px; padding: 10px; text-align: center; }
+.stat-num { font-size: 20px; font-weight: 700; color: #e8500a; line-height: 1.2; }
+.stat-label { font-size: 11px; color: #4c5260; margin-top: 2px; }
+#panel-detail { display: none; flex-direction: column; }
+#panel-detail.active { display: flex; }
+.panel-hero { height: 160px; background: #f0e8e0; position: relative; overflow: hidden; }
+.panel-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.panel-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.5)); }
+.panel-body { padding: 16px 20px; }
+.panel-title { font-size: 16px; font-weight: 600; color: #111; margin-bottom: 10px; line-height: 1.4; }
+.panel-title a { color: inherit; text-decoration: none; border-bottom: 1px solid #e5e7eb; }
+.panel-title a:hover { color: #e8500a; }
+.panel-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.tag { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+.tag-walk { background: #e6ede9; color: #1d6746; }
+.tag-cycle { background: #fff4ef; color: #e8500a; }
+.tag-camino { background: #f5f0ff; color: #6b21a8; }
+.tag-boat { background: #e6f4ff; color: #0369a1; }
+.tag-alpine { background: #f0f9ff; color: #0c4a6e; }
+.panel-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.meta-item { background: #f9fafb; border-radius: 8px; padding: 8px 12px; }
+.meta-label { font-size: 11px; color: #9ca3af; margin-bottom: 2px; }
+.meta-value { font-size: 13px; font-weight: 500; color: #111; }
+.panel-desc { font-size: 13px; color: #4c5260; line-height: 1.65; margin-bottom: 14px; }
+h3.section-title { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+.itinerary-list { margin-top: 6px; margin-bottom: 14px; max-height: 260px; overflow-y: auto; }
+.itinerary-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6; text-decoration: none; }
+.itinerary-item:last-child { border-bottom: none; }
+.itinerary-item:hover .itin-name { color: #e8500a; }
+.itin-name { font-size: 13px; color: #374151; flex: 1; line-height: 1.4; }
+.itin-tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 10px; margin-left: 6px; flex-shrink: 0; }
+.itin-arrow { font-size: 14px; color: #d1d5db; margin-left: 6px; flex-shrink: 0; }
+.cta-btn { display: block; text-align: center; font-size: 13px; font-weight: 500; color: #fff !important; background: #e8500a; padding: 10px 18px; border-radius: 8px; text-decoration: none; }
+.cta-btn:hover { background: #c43d07; }
+.route-tooltip { background: #fff; border: none; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px; font-weight: 500; color: #111; padding: 5px 10px; }
+.route-tooltip::before { display: none; }
+.leaflet-container { height: 100% !important; }
+#btn-fullscreen { margin-left: auto; }
+@media (max-width: 600px) {
+  #map-wrapper { flex-direction: column; height: 480px; border: 1px solid #e5e7eb; border-radius: 8px; }
+  #map { width: 100%; height: 480px; flex: none; }
+  #panel { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; height: auto; max-height: 76%; border-left: none; border-top: 1px solid #e5e7eb; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 24px rgba(0,0,0,0.15); transform: translateY(100%); transition: transform 0.3s ease; z-index: 1000; }
+  #panel.mobile-open { transform: translateY(0); }
+  #panel-default { display: none !important; }
+  #filters { position: absolute; top: 10px; left: 0; right: 0; z-index: 999; background: transparent; border: none; padding: 0 10px; justify-content: center; }
+  .filter-btn { box-shadow: 0 1px 4px rgba(0,0,0,0.2); background: #fff; }
+  #btn-fullscreen { display: none; }
+}
+</style>
+
+<div id="map-wrapper">
+  <div id="map"></div>
+  <div id="panel">
+    <div id="filters">
+      <button class="filter-btn active" data-f="all">All</button>
+      <button class="filter-btn" data-f="walking">Walking</button>
+      <button class="filter-btn" data-f="cycling">Cycling</button>
+      <button class="filter-btn" data-f="camino">Camino</button>
+      <button class="filter-btn" data-f="boat">Bike &amp; Boat</button>
+      <button class="filter-btn" data-f="alpine">Alpine</button>
+      <button class="filter-btn" id="btn-fullscreen">⛶ Expand</button>
+    </div>
+    <div id="panel-default">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <img src="https://www.utracks.com/favicon.ico" style="width:28px;height:28px;border-radius:4px" onerror="this.style.display='none'">
+        <span style="font-size:17px;font-weight:700;color:#e8500a">UTracks</span>
+      </div>
+      <h2>Europe Walking &amp; Cycling Destinations</h2>
+      <p>Explore walking, cycling, Camino, Bike &amp; Boat and Alpine tours across Europe. Click any pin to discover trips and itineraries.</p>
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-num">30+</div><div class="stat-label">Destinations</div></div>
+        <div class="stat-box"><div class="stat-num">🚶</div><div class="stat-label">Walking</div></div>
+        <div class="stat-box"><div class="stat-num">🚴</div><div class="stat-label">Cycling</div></div>
+        <div class="stat-box"><div class="stat-num">⛵</div><div class="stat-label">Bike &amp; Boat</div></div>
+      </div>
+    </div>
+    <div id="panel-detail">
+      <div class="panel-hero" id="d-hero"><div class="panel-hero-overlay"></div></div>
+      <div class="panel-body">
+        <div class="panel-title" id="d-title"></div>
+        <div class="panel-tags" id="d-tags"></div>
+        <div class="panel-meta" id="d-meta"></div>
+        <p class="panel-desc" id="d-desc"></p>
+        <h3 class="section-title" id="d-tours-heading">Tours</h3>
+        <div class="itinerary-list" id="d-itins"></div>
+        <div id="d-cta"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var BASE = 'https://www.utracks.com';
+var ORANGE = '#e8500a';
+var MUTED = '#b0bec5';
+
+// type: walking | cycling | camino | boat | alpine (can be array for multi-type destinations)
+var destinations = [
+
+  // ── FRANCE ──
+  { id:'fr_alsace', name:'Alsace', country:'France', lat:48.20, lng:7.40,
+    types:['cycling','walking'],
+    desc:'Wine-route cycling and walking through half-timbered villages, Riesling vineyards and Rhine valley castles.',
+    hub: BASE+'/destinations/europe/france/alsace',
+    tours:[
+      {n:'Alsace by Bike', t:'cycling', u:BASE+'/cycling/france/alsace-by-bike'},
+      {n:'Alsace Mountains & Vineyards Walk', t:'walking', u:BASE+'/walking/france/alsace-mountains-vineyards-walk'},
+      {n:'Alsace Wine Route Cycle', t:'cycling', u:BASE+'/cycling/france/alsace-wine-route-cycle'},
+      {n:'Alsace Vineyards & Rhine Cycle to Strasbourg', t:'cycling', u:BASE+'/cycling/france/alsace-vineyards-rhine-cycle-to-strasbourg'},
+      {n:'Alsace Vineyard Trails', t:'walking', u:BASE+'/walking/france/alsace-vineyard-trails'},
+      {n:'Lake Constance to Strasbourg by Bike', t:'cycling', u:BASE+'/cycling/germany/lake-constance-to-strasbourg-by-bike'},
+    ]},
+
+  { id:'fr_paris', name:'Paris & Île-de-France', country:'France', lat:48.85, lng:2.35,
+    types:['cycling','boat'],
+    desc:'Cycle along the Seine, explore the Loire by bike and barge, or glide through Burgundy canals on a floating hotel.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Paris to Bruges Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/paris-to-bruges-bike-and-barge'},
+      {n:'Champagne and Paris by Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/champagne-and-paris-by-bike-and-barge'},
+      {n:'Cycle Amsterdam to Paris', t:'cycling', u:BASE+'/cycling/netherlands/cycle-amsterdam-to-paris'},
+      {n:'Paris and the Seine Valley Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/paris-and-the-seine-valley-bike-and-barge'},
+      {n:'Fontainebleau to the Loire by Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/fontainebleau-to-the-loire-by-bike-and-barge'},
+      {n:'The Loire to Fontainebleau by Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/the-loire-to-fontainebleau-by-bike-and-barge'},
+    ]},
+
+  { id:'fr_normandy', name:'Normandy', country:'France', lat:49.10, lng:0.30,
+    types:['cycling','walking'],
+    desc:'Cycle the D-Day coastline or walk Normandy\'s bocage countryside — history, cider and seafood at every turn.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Cycle Normandy', t:'cycling', u:BASE+'/cycling/france/cycle-normandy'},
+      {n:'Normandy on Foot', t:'walking', u:BASE+'/walking/france/normandy-on-foot'},
+      {n:'Normandy Coastal Walk', t:'walking', u:BASE+'/walking/france/normandy-coastal-walk'},
+      {n:'Cycle the Western Front', t:'cycling', u:BASE+'/cycling/france/cycle-the-western-front'},
+      {n:'Western Front Walk - Amiens to Arras', t:'walking', u:BASE+'/walking/france/western-front-walk-amiens-to-arras'},
+    ]},
+
+  { id:'fr_champagne', name:'Champagne & Burgundy', country:'France', lat:47.80, lng:4.60,
+    types:['cycling','boat'],
+    desc:'Vineyard cycling and barge journeys through the grand cru heartland of Burgundy and the Champagne houses of Reims.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Burgundy Canals and Vineyards', t:'cycling', u:BASE+'/cycling/france/burgundy-canals-and-vineyards'},
+      {n:'Burgundy Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/burgundy-bike-and-barge'},
+      {n:'Champagne Trails Cycle', t:'cycling', u:BASE+'/cycling/france/champagne-trails-cycle'},
+      {n:'Burgundy Vineyard Trails', t:'walking', u:BASE+'/walking/france/burgundy-vineyard-trails'},
+      {n:'Burgundy Highlights', t:'cycling', u:BASE+'/cycling/france/burgundy-highlights'},
+    ]},
+
+  { id:'fr_loire', name:'Loire Valley', country:'France', lat:47.40, lng:0.80,
+    types:['cycling','boat'],
+    desc:'Châteaux, vineyards and gentle riverside cycling make the Loire one of France\'s most beloved bike routes.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Loire Valley Castles Cycle', t:'cycling', u:BASE+'/cycling/france/loire-valley-castles-cycle'},
+      {n:'Loire Valley Cycle', t:'cycling', u:BASE+'/cycling/france/loire-valley-cycle'},
+      {n:'Classic Loire Valley by Bike', t:'cycling', u:BASE+'/cycling/france/classic-loire-valley-by-bike'},
+      {n:'Cycle the Loire - Nevers to Orléans', t:'cycling', u:BASE+'/cycling/france/cycle-the-loire-nevers-to-orleans'},
+      {n:'Cycle the Loire - Orléans to the Atlantic Coast', t:'cycling', u:BASE+'/cycling/france/cycle-the-loire-orleans-to-the-atlantic-coast'},
+    ]},
+
+  { id:'fr_bordeaux', name:'Bordeaux & Dordogne', country:'France', lat:44.85, lng:0.60,
+    types:['cycling','walking'],
+    desc:'Pedal through Médoc châteaux, cycle to Biarritz, or explore the prehistoric caves and golden villages of the Dordogne on foot.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Bordeaux Vineyard Cycle', t:'cycling', u:BASE+'/cycling/france/bordeaux-vineyard-cycle'},
+      {n:'Cycle Bordeaux to Biarritz', t:'cycling', u:BASE+'/cycling/france/cycle-bordeaux-to-biarritz'},
+      {n:'Bordeaux to Toulouse Cycle', t:'cycling', u:BASE+'/cycling/france/bordeaux-to-toulouse-cycle'},
+      {n:'Atlantic Coast Cycle - La Rochelle to Bordeaux', t:'cycling', u:BASE+'/cycling/france/atlantic-coast-cycle-la-rochelle-to-bordeaux'},
+      {n:'Atlantic Coast Cycle - Nantes to La Rochelle', t:'cycling', u:BASE+'/cycling/france/atlantic-coast-cycle-nantes-to-la-rochelle'},
+      {n:'Medoc Vineyard Cycle', t:'cycling', u:BASE+'/cycling/france/medoc-vineyard-cycle'},
+      {n:'Cycle the Dordogne', t:'cycling', u:BASE+'/cycling/france/cycle-the-dordogne'},
+      {n:'Highlights of the Dordogne by Bike', t:'cycling', u:BASE+'/cycling/france/highlights-of-the-dordogne-by-bike'},
+      {n:'Dordogne\'s Hidden Treasures on Foot - 8 Days', t:'walking', u:BASE+'/walking/france/dordognes-hidden-treasures-on-foot-8-days'},
+      {n:'Dordogne\'s Hidden Treasures on Foot - 10 Days', t:'walking', u:BASE+'/walking/france/dordognes-hidden-treasures-on-foot-10-days'},
+      {n:'Walking in the Dordogne', t:'walking', u:BASE+'/walking/france/walking-in-the-dordogne'},
+    ]},
+
+  { id:'fr_provence', name:'Provence', country:'France', lat:43.90, lng:5.20,
+    types:['cycling','walking','boat'],
+    desc:'Lavender fields, ochre villages and Roman ruins — explore Provence by bike, on foot or on a barge along the Rhône.',
+    hub: BASE+'/destinations/europe/france/provence',
+    tours:[
+      {n:'Provence Backroads Cycle', t:'cycling', u:BASE+'/cycling/france/provence-backroads-cycle'},
+      {n:'Provence Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/france/provence-bike-and-boat'},
+      {n:'Provence & the Rhône Valley Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/france/provence-and-the-rhone-valley-bike-and-barge'},
+      {n:'Provence Alpilles by Bike', t:'cycling', u:BASE+'/cycling/france/provence-alpilles-by-bike'},
+      {n:'Highlights of Provence by Bike', t:'cycling', u:BASE+'/cycling/france/highlights-of-provence-by-bike'},
+      {n:'Provence Vineyard Trails', t:'walking', u:BASE+'/walking/france/provence-vineyard-trails'},
+      {n:'Provence Winter Sun & Walking', t:'walking', u:BASE+'/walking/france/provence-winter-sun-and-walking'},
+      {n:'Rambling in the Luberon', t:'walking', u:BASE+'/walking/france/rambling-in-the-luberon'},
+      {n:'Walking In Van Gogh\'s Provence', t:'walking', u:BASE+'/walking/france/walking-in-van-goghs-provence'},
+      {n:'Walking in Haute Provence', t:'walking', u:BASE+'/walking/france/walking-in-haute-provence'},
+      {n:'Walking the Côte d\'Azur & Golden Isles', t:'walking', u:BASE+'/walking/france/walking-the-cote-dazur-and-golden-isles'},
+    ]},
+
+  { id:'fr_pyrenees', name:'Pyrenees & South France', country:'France', lat:42.80, lng:1.50,
+    types:['camino','walking'],
+    desc:'The start of the Camino Francés and the wild walking country of the Pyrenees — rugged, spiritual and unforgettable.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Highlights of the High Pyrenees', t:'walking', u:BASE+'/walking/france/highlights-of-the-high-pyrenees'},
+      {n:'Pyrenees Circuit Hike', t:'walking', u:BASE+'/walking/france/pyrenees-circuit-hike'},
+      {n:'Camino - St Jean Pied de Port to Logrono', t:'camino', u:BASE+'/camino/france/camino-st-jean-to-logrono'},
+      {n:'Camino - St Jean to Pamplona', t:'camino', u:BASE+'/camino/france/camino-st-jean-to-pamplona'},
+      {n:'Footsteps of Dali', t:'walking', u:BASE+'/walking/france/footsteps-of-dali'},
+      {n:'Hiking the Vermillion Coast', t:'walking', u:BASE+'/walking/france/hiking-the-vermillion-coast'},
+    ]},
+
+  { id:'fr_alpsmb', name:'French Alps & Mont Blanc', country:'France', lat:45.83, lng:6.86,
+    types:['alpine'],
+    desc:'The classic Tour du Mont Blanc — one of the world\'s great alpine walks — plus the wild glaciers and passes of the Écrins National Park.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Mont Blanc Self Guided Hike', t:'alpine', u:BASE+'/alpine/france/mont-blanc-self-guided-hike'},
+      {n:'Mont Blanc Guided Hike in Huts', t:'alpine', u:BASE+'/alpine/france/mont-blanc-guided-hike-in-huts'},
+      {n:'Mont Blanc Encompassed Guided Hike in Huts', t:'alpine', u:BASE+'/alpine/france/mont-blanc-encompassed-guided-hike-in-huts'},
+      {n:'Mont Blanc Rambler Guided Hike in Huts', t:'alpine', u:BASE+'/alpine/france/mont-blanc-rambler-guided-hike-in-huts'},
+      {n:'Tour du Mont Blanc in Comfort', t:'alpine', u:BASE+'/alpine/france/tour-du-mont-blanc-in-comfort'},
+      {n:'Highlights of the Tour du Mont Blanc in Comfort', t:'alpine', u:BASE+'/alpine/france/highlights-of-the-tour-du-mont-blanc-in-comfort'},
+      {n:'Hiking in the French Alps: Écrins National Park', t:'alpine', u:BASE+'/alpine/france/hiking-in-the-french-alps-ecrins-national-park'},
+      {n:'E5 Alps Crossing Hike: Oberstdorf to Merano', t:'alpine', u:BASE+'/alpine/austria/e5-alps-crossing-hike-oberstdorf-to-merano'},
+      {n:'E5 Alps Crossing in Comfort: Oberstdorf to Merano', t:'alpine', u:BASE+'/alpine/austria/e5-alps-crossing-in-comfort-oberstdorf-to-merano'},
+    ]},
+
+  { id:'fr_cevennes', name:'Cévennes & Ardèche', country:'France', lat:44.20, lng:3.80,
+    types:['walking'],
+    desc:'Remote gorges, Stevenson\'s literary trail and the wild landscapes of southern France — some of the country\'s most unspoilt walking.',
+    hub: BASE+'/destinations/europe/france',
+    tours:[
+      {n:'Stevenson\'s Trail: The Cévennes - 8 Days', t:'walking', u:BASE+'/walking/france/stevensons-trail-the-cevennes-8-days'},
+      {n:'Stevenson\'s Trail: The Cévennes - 11 Days', t:'walking', u:BASE+'/walking/france/stevensons-trail-the-cevennes-11-days'},
+      {n:'Secret France: Walking in the Ardèche - 8 Days', t:'walking', u:BASE+'/walking/france/secret-france-walking-in-the-ardeche-8-days'},
+      {n:'Walking in the Ardèche', t:'walking', u:BASE+'/walking/france/walking-in-the-ardeche'},
+      {n:'Hill Top Villages of Medieval Tarn', t:'walking', u:BASE+'/walking/france/hill-top-villages-of-medieval-tarn'},
+    ]},
+
+  // ── SPAIN ──
+  { id:'es_camino', name:'Camino de Santiago', country:'Spain', lat:42.88, lng:-8.54,
+    types:['camino'],
+    desc:'The world\'s most famous pilgrimage — walk or cycle the Camino Francés, Primitivo, Norte, Portugués and more routes to Santiago de Compostela.',
+    hub: BASE+'/camino',
+    tours:[
+      {n:'Camino - Sarria to Santiago Classic', t:'camino', u:BASE+'/camino/spain/camino-sarria-to-santiago-classic'},
+      {n:'Camino - Sarria to Santiago Rambler', t:'camino', u:BASE+'/camino/spain/camino-sarria-to-santiago-rambler'},
+      {n:'Guided Camino Walk - Sarria to Santiago', t:'camino', u:BASE+'/camino/spain/guided-camino-walk-sarria-to-santiago'},
+      {n:'Full Spanish Camino Classic', t:'camino', u:BASE+'/camino/spain/full-spanish-camino-classic'},
+      {n:'Full Spanish Camino Rambler', t:'camino', u:BASE+'/camino/spain/full-spanish-camino-rambler'},
+      {n:'Spanish Camino by Bike: The Pyrenees to Leon', t:'camino', u:BASE+'/camino/spain/spanish-camino-by-bike-the-pyrenees-to-leon'},
+      {n:'Full Spanish Camino by Bike', t:'camino', u:BASE+'/camino/spain/full-spanish-camino-by-bike'},
+      {n:'Camino Norte - Bilbao to Santiago', t:'camino', u:BASE+'/camino/spain/camino-norte-bilbao-to-santiago'},
+      {n:'Camino Sanabrés to Santiago', t:'camino', u:BASE+'/camino/spain/camino-sanabres-to-santiago'},
+      {n:'Camino Finisterre: Santiago to the Atlantic', t:'camino', u:BASE+'/camino/spain/camino-finisterre-santiago-to-the-atlantic'},
+      {n:'Food Lover\'s Spanish Camino', t:'camino', u:BASE+'/camino/spain/food-lovers-spanish-camino'},
+    ]},
+
+  { id:'es_north', name:'Northern Spain', country:'Spain', lat:43.30, lng:-3.80,
+    types:['walking','camino'],
+    desc:'The Picos de Europa, Basque coast and the pilgrim routes of Northern Spain — bold landscapes, bold food and the ancient road to Santiago.',
+    hub: BASE+'/destinations/europe/spain',
+    tours:[
+      {n:'Hiking in the Picos de Europa', t:'walking', u:BASE+'/walking/spain/hiking-in-the-picos-de-europa'},
+      {n:'Picos, Pintxos and Camino Guided Walk', t:'walking', u:BASE+'/walking/spain/picos-pintxos-and-camino-guided-walk'},
+      {n:'Highlights of the Camino Primitivo', t:'camino', u:BASE+'/camino/spain/highlights-of-the-camino-primitivo'},
+      {n:'Hilltop Towns of Aragon: Walking in Spanish Tuscany', t:'walking', u:BASE+'/walking/spain/hilltop-towns-of-aragon'},
+    ]},
+
+  { id:'es_andalucia', name:'Andalucía', country:'Spain', lat:37.20, lng:-4.80,
+    types:['walking','cycling'],
+    desc:'White villages, cork forests and the dramatic gorges of the Sierra Nevada — Southern Spain at its most captivating on foot or by bike.',
+    hub: BASE+'/destinations/europe/spain',
+    tours:[
+      {n:'Smugglers Trails of the Sierra de Aracena - 8 Days', t:'walking', u:BASE+'/walking/spain/smugglers-trails-of-the-sierra-de-aracena-8-days'},
+      {n:'Ronda and the Sierra de Grazalema', t:'walking', u:BASE+'/walking/spain/ronda-and-the-sierra-de-grazalema'},
+      {n:'Ronda and the Sierra de Grazalema by Bike', t:'cycling', u:BASE+'/cycling/spain/ronda-and-the-sierra-de-grazalema-by-bike'},
+      {n:'Granada and the Alpujarras', t:'walking', u:BASE+'/walking/spain/granada-and-the-alpujarras'},
+    ]},
+
+  { id:'es_catalonia', name:'Catalonia', country:'Spain', lat:41.50, lng:1.80,
+    types:['cycling'],
+    desc:'Cycle through the vineyards and medieval villages of Catalonia, or explore the Costa Brava\'s dramatic clifftop paths.',
+    hub: BASE+'/destinations/europe/spain',
+    tours:[
+      {n:'Catalonia by Bike', t:'cycling', u:BASE+'/cycling/spain/catalonia-by-bike'},
+      {n:'Catalonia by Bike for Families', t:'cycling', u:BASE+'/cycling/spain/catalonia-by-bike-for-families'},
+    ]},
+
+  { id:'es_canaries', name:'Canary Islands', country:'Spain', lat:28.30, lng:-15.80,
+    types:['walking'],
+    desc:'Volcanic peaks, ancient laurel forests and dramatic sea cliffs — walking on Tenerife, La Gomera and La Palma is unlike anywhere else in Europe.',
+    hub: BASE+'/destinations/europe/spain',
+    tours:[
+      {n:'Hiking in Tenerife', t:'walking', u:BASE+'/walking/spain/hiking-in-tenerife'},
+      {n:'Exploring La Gomera - 8 Days', t:'walking', u:BASE+'/walking/spain/exploring-la-gomera-8-days'},
+      {n:'Exploring La Gomera - 11 Days', t:'walking', u:BASE+'/walking/spain/exploring-la-gomera-11-days'},
+      {n:'La Palma Island Walking', t:'walking', u:BASE+'/walking/spain/la-palma-island-walking'},
+    ]},
+
+  // ── PORTUGAL ──
+  { id:'pt_camino', name:'Portuguese Camino', country:'Portugal', lat:41.15, lng:-8.61,
+    types:['camino'],
+    desc:'Walk or cycle the Camino Português from Lisbon or Porto to Santiago — the coast, the spiritual variant and the central route.',
+    hub: BASE+'/camino/portugal',
+    tours:[
+      {n:'Portuguese Camino - Porto to Santiago', t:'camino', u:BASE+'/camino/portugal/portuguese-camino-porto-to-santiago'},
+      {n:'Full Portuguese Camino', t:'camino', u:BASE+'/camino/portugal/full-portuguese-camino'},
+      {n:'Portuguese Coastal Camino - Porto to Santiago', t:'camino', u:BASE+'/camino/portugal/portuguese-coastal-camino-porto-to-santiago'},
+      {n:'Portuguese Coastal Camino - Spiritual Variant from Porto', t:'camino', u:BASE+'/camino/portugal/portuguese-coastal-camino-spiritual-variant-from-porto'},
+      {n:'Full Portuguese Coastal Camino', t:'camino', u:BASE+'/camino/portugal/full-portuguese-coastal-camino'},
+      {n:'Best of the Portuguese Camino Guided Walk', t:'camino', u:BASE+'/camino/portugal/best-of-the-portuguese-camino-guided-walk'},
+      {n:'Portuguese Camino Cycle - Porto to Santiago', t:'camino', u:BASE+'/camino/portugal/portuguese-camino-cycle-porto-to-santiago'},
+    ]},
+
+  { id:'pt_north', name:'Northern Portugal', country:'Portugal', lat:41.50, lng:-7.90,
+    types:['walking'],
+    desc:'The Douro valley\'s terraced vineyards, the wild Minho mountains and the Rota Vicentina\'s Atlantic cliffs make Portugal one of Europe\'s great walking nations.',
+    hub: BASE+'/destinations/europe/portugal',
+    tours:[
+      {n:'Douro Rambler In Comfort', t:'walking', u:BASE+'/walking/portugal/douro-rambler-in-comfort'},
+      {n:'Walking Northern Portugal: Douro, Mountains & Coast', t:'walking', u:BASE+'/walking/portugal/walking-northern-portugal-douro-mountains-and-coast'},
+      {n:'Hiking the High Trails of Northern Portugal', t:'walking', u:BASE+'/walking/portugal/hiking-the-high-trails-of-northern-portugal'},
+      {n:'Portugal Palaces and Coast Walk', t:'walking', u:BASE+'/walking/portugal/portugal-palaces-and-coast-walk'},
+      {n:'Cycle the Alentejo to the Algarve', t:'cycling', u:BASE+'/cycling/portugal/cycle-the-alentejo-to-the-algarve'},
+      {n:'Rota Vicentina - the Fishermen\'s Trail', t:'walking', u:BASE+'/walking/portugal/rota-vicentina-the-fishermens-trail'},
+      {n:'The Full Rota Vicentina', t:'walking', u:BASE+'/walking/portugal/the-full-rota-vicentina'},
+      {n:'Rota Vicentina: to the Algarve', t:'walking', u:BASE+'/walking/portugal/rota-vicentina-to-the-algarve'},
+    ]},
+
+  { id:'pt_madeira', name:'Madeira', country:'Portugal', lat:32.70, lng:-17.00,
+    types:['walking','cycling'],
+    desc:'Madeira\'s extraordinary levada trails, sea cliffs and laurel forest offer year-round walking and e-bike adventures on this Atlantic island.',
+    hub: BASE+'/destinations/europe/portugal',
+    tours:[
+      {n:'Madeira Island Walking', t:'walking', u:BASE+'/walking/portugal/madeira-island-walking'},
+      {n:'Madeira Island Walking: East to West', t:'walking', u:BASE+'/walking/portugal/madeira-island-walking-east-to-west'},
+      {n:'Western Madeira Hiking', t:'walking', u:BASE+'/walking/portugal/western-madeira-hiking'},
+      {n:'Madeira Cycle by E-Bike', t:'cycling', u:BASE+'/cycling/portugal/madeira-cycle-by-e-bike'},
+    ]},
+
+  // ── ITALY ──
+  { id:'it_tuscany', name:'Tuscany', country:'Italy', lat:43.40, lng:11.00,
+    types:['cycling','walking'],
+    desc:'Cycle the Via Francigena through Chianti, walk Tuscan hilltop towns and explore the marble mountains of the Apuane Alps.',
+    hub: BASE+'/destinations/europe/italy/tuscany',
+    tours:[
+      {n:'Cycle the Wine Regions of Tuscany', t:'cycling', u:BASE+'/cycling/italy/cycle-the-wine-regions-of-tuscany'},
+      {n:'Tuscany Cycle for Families', t:'cycling', u:BASE+'/cycling/italy/tuscany-cycle-for-families'},
+      {n:'Cycle Florence to Siena', t:'cycling', u:BASE+'/cycling/italy/cycle-florence-to-siena'},
+      {n:'Pisa to Florence via Chianti Cycle', t:'cycling', u:BASE+'/cycling/italy/pisa-to-florence-via-chianti-cycle'},
+      {n:'Florence to Siena via Chianti Walk', t:'walking', u:BASE+'/walking/italy/florence-to-siena-via-chianti-walk'},
+      {n:'Chianti Highlights Walk', t:'walking', u:BASE+'/walking/italy/chianti-highlights-walk'},
+      {n:'Via Degli Dei: Bologna to Florence', t:'walking', u:BASE+'/walking/italy/via-degli-dei-bologna-to-florence'},
+      {n:'Exploring Tuscan Hilltop Towns', t:'walking', u:BASE+'/walking/italy/exploring-tuscan-hilltop-towns'},
+      {n:'Walking in Tuscany\'s Apuane Alps', t:'walking', u:BASE+'/walking/italy/walking-in-tuscanys-apuane-alps'},
+      {n:'Via Francigena: Best of Tuscany', t:'camino', u:BASE+'/camino/italy/via-francigena-best-of-tuscany'},
+    ]},
+
+  { id:'it_amalfi', name:'Amalfi & Southern Italy', country:'Italy', lat:40.65, lng:14.60,
+    types:['walking'],
+    desc:'The Amalfi Coast\'s vertiginous clifftop paths, the trulli of Puglia and the ancient landscapes of Cilento — Southern Italy on foot.',
+    hub: BASE+'/destinations/europe/italy',
+    tours:[
+      {n:'Classic Amalfi Coast - 6 Days', t:'walking', u:BASE+'/walking/italy/classic-amalfi-coast-6-days'},
+      {n:'Classic Amalfi Coast - 8 Days', t:'walking', u:BASE+'/walking/italy/classic-amalfi-coast-8-days'},
+      {n:'Classic Amalfi Coast - 11 Days', t:'walking', u:BASE+'/walking/italy/classic-amalfi-coast-11-days'},
+      {n:'Amalfi Explorer', t:'walking', u:BASE+'/walking/italy/amalfi-explorer'},
+      {n:'Rome and the Amalfi Coast on Foot', t:'walking', u:BASE+'/walking/italy/rome-and-the-amalfi-coast-on-foot'},
+      {n:'Puglia Guided Walk', t:'walking', u:BASE+'/walking/italy/puglia-guided-walk'},
+      {n:'Walking in Puglia', t:'walking', u:BASE+'/walking/italy/walking-in-puglia'},
+      {n:'Puglia Coastal Walk', t:'walking', u:BASE+'/walking/italy/puglia-coastal-walk'},
+      {n:'Cycle Puglia', t:'cycling', u:BASE+'/cycling/italy/cycle-puglia'},
+      {n:'Puglia Coastal Cycle', t:'cycling', u:BASE+'/cycling/italy/puglia-coastal-cycle'},
+    ]},
+
+  { id:'it_dolomites', name:'Dolomites', country:'Italy', lat:46.50, lng:11.80,
+    types:['alpine','cycling'],
+    desc:'The UNESCO-listed Dolomites offer some of the Alps\' most spectacular walking and cycling — sheer pink towers, Alta Via paths and the legendary Munich to Venice route.',
+    hub: BASE+'/destinations/europe/italy/dolomites',
+    tours:[
+      {n:'Dolomites Guided Hike', t:'alpine', u:BASE+'/alpine/italy/dolomites-guided-hike'},
+      {n:'Dolomites Alta Via 1 Self Guided Hike', t:'alpine', u:BASE+'/alpine/italy/dolomites-alta-via-1-self-guided-hike'},
+      {n:'Walking in the Dolomites in Comfort', t:'alpine', u:BASE+'/alpine/italy/walking-in-the-dolomites-in-comfort'},
+      {n:'Highlights of the Dolomites in Comfort', t:'alpine', u:BASE+'/alpine/italy/highlights-of-the-dolomites-in-comfort'},
+      {n:'Cycle the Dolomites to Venice', t:'cycling', u:BASE+'/cycling/italy/cycle-the-dolomites-to-venice'},
+      {n:'Munich to Venice by Bike', t:'cycling', u:BASE+'/cycling/germany/munich-to-venice-by-bike'},
+      {n:'Munich to Venice Premium by E-Bike', t:'cycling', u:BASE+'/cycling/germany/munich-to-venice-premium-by-e-bike'},
+      {n:'Chestnut Trail: In the Shadow of the Dolomites', t:'walking', u:BASE+'/walking/italy/chestnut-trail-in-the-shadow-of-the-dolomites'},
+      {n:'Trans Tyrol - Garmisch to Innsbruck Hike', t:'alpine', u:BASE+'/alpine/austria/trans-tyrol-garmisch-to-innsbruck-hike'},
+      {n:'Trans Tyrol - Innsbruck to the Dolomites Hike', t:'alpine', u:BASE+'/alpine/austria/trans-tyrol-innsbruck-to-the-dolomites-hike'},
+    ]},
+
+  { id:'it_lakes', name:'Italian Lakes & Venice', country:'Italy', lat:45.90, lng:10.00,
+    types:['cycling','walking','boat'],
+    desc:'Cycle through vineyards from Venice to Verona, walk the shores of Lake Como, or explore the Veneto by bike and boat.',
+    hub: BASE+'/destinations/europe/italy',
+    tours:[
+      {n:'Lake Como Rambling', t:'walking', u:BASE+'/walking/italy/lake-como-rambling'},
+      {n:'Lake Como Walk', t:'walking', u:BASE+'/walking/italy/lake-como-walk'},
+      {n:'Via Spluga and Lake Como Hike', t:'walking', u:BASE+'/walking/italy/via-spluga-and-lake-como-hike'},
+      {n:'Cycle Bolzano to Verona', t:'cycling', u:BASE+'/cycling/italy/cycle-bolzano-to-verona'},
+      {n:'Cycle Innsbruck to Verona', t:'cycling', u:BASE+'/cycling/austria/cycle-innsbruck-to-verona'},
+      {n:'Backroads to Venice', t:'cycling', u:BASE+'/cycling/italy/backroads-to-venice'},
+      {n:'Ancient Venetian Empire by Bike', t:'cycling', u:BASE+'/cycling/italy/ancient-venetian-empire-by-bike'},
+      {n:'Veneto Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/italy/veneto-bike-and-boat'},
+      {n:'Tuscany Bike and Boat', t:'boat', u:BASE+'/bike-and-boat/italy/tuscany-bike-and-boat'},
+      {n:'Prosecco Trail', t:'cycling', u:BASE+'/cycling/italy/prosecco-trail'},
+      {n:'Hilltop Towns of Italy', t:'walking', u:BASE+'/walking/italy/hilltop-towns-of-italy'},
+    ]},
+
+  { id:'it_cinque', name:'Cinque Terre & Liguria', country:'Italy', lat:44.10, lng:9.70,
+    types:['walking'],
+    desc:'Five colourful cliffside villages connected by ancient paths above the Ligurian Sea — one of Italy\'s most iconic walking routes.',
+    hub: BASE+'/destinations/europe/italy',
+    tours:[
+      {n:'Exploring Cinque Terre Villages on Foot', t:'walking', u:BASE+'/walking/italy/exploring-cinque-terre-villages-on-foot'},
+      {n:'Cinque Terre Walk', t:'walking', u:BASE+'/walking/italy/cinque-terre-walk'},
+      {n:'Portofino and the Cinque Terre', t:'walking', u:BASE+'/walking/italy/portofino-and-the-cinque-terre'},
+    ]},
+
+  { id:'it_rome', name:'Rome & Via Francigena', country:'Italy', lat:41.90, lng:12.50,
+    types:['camino','cycling'],
+    desc:'Walk or cycle the Via Francigena to Rome — the ancient pilgrim road from Canterbury to St Peter\'s Basilica through Tuscany and Lazio.',
+    hub: BASE+'/camino/italy',
+    tours:[
+      {n:'Via Francigena: Best of Tuscany', t:'camino', u:BASE+'/camino/italy/via-francigena-best-of-tuscany'},
+      {n:'Via Francigena: Lucca to Siena', t:'camino', u:BASE+'/camino/italy/via-francigena-lucca-to-siena'},
+      {n:'Via Francigena: Orvieto to Rome', t:'camino', u:BASE+'/camino/italy/via-francigena-orvieto-to-rome'},
+      {n:'The Full Via Francigena', t:'camino', u:BASE+'/camino/italy/the-full-via-francigena'},
+      {n:'Cycle the Via Francigena - Parma to Siena', t:'camino', u:BASE+'/camino/italy/cycle-the-via-francigena-parma-to-siena'},
+      {n:'Cycle the Via Francigena - Siena to Rome', t:'camino', u:BASE+'/camino/italy/cycle-the-via-francigena-siena-to-rome'},
+      {n:'Florence to Rome by Bike', t:'cycling', u:BASE+'/cycling/italy/florence-to-rome-by-bike'},
+      {n:'St Francis Way: Florence to Rome (Full)', t:'camino', u:BASE+'/camino/italy/full-st-francis-way-florence-to-rome'},
+    ]},
+
+  { id:'it_sicily', name:'Sicily & Sardinia', country:'Italy', lat:37.60, lng:13.90,
+    types:['walking','cycling'],
+    desc:'Sicily\'s ancient temples, volcanic landscapes and coastal walks, plus the wild interior of Sardinia — Italy\'s islands on foot or by bike.',
+    hub: BASE+'/destinations/europe/italy',
+    tours:[
+      {n:'Cycle Sicily - Coast and Temples', t:'cycling', u:BASE+'/cycling/italy/cycle-sicily-coast-and-temples'},
+      {n:'Sicily - Magna Via Francigena', t:'walking', u:BASE+'/walking/italy/sicily-magna-via-francigena'},
+      {n:'Western Sicily on Foot', t:'walking', u:BASE+'/walking/italy/western-sicily-on-foot'},
+      {n:'Western Sicily Guided Walk', t:'walking', u:BASE+'/walking/italy/western-sicily-guided-walk'},
+      {n:'Sardinia Cycle', t:'cycling', u:BASE+'/cycling/italy/sardinia-cycle'},
+      {n:'Sardinia Guided Walk', t:'walking', u:BASE+'/walking/italy/sardinia-guided-walk'},
+      {n:'Sardinia Family Cycle Adventure', t:'cycling', u:BASE+'/cycling/italy/sardinia-family-cycle-adventure'},
+    ]},
+
+  // ── SWITZERLAND & AUSTRIA ──
+  { id:'ch_swiss', name:'Switzerland', country:'Switzerland', lat:46.80, lng:8.20,
+    types:['alpine','cycling'],
+    desc:'The Haute Route, Alpine Pass Route and Bernese Oberland classics — Switzerland offers the finest high-altitude walking in the Alps, plus the Rhine and Via Rhôna by bike.',
+    hub: BASE+'/destinations/europe/switzerland',
+    tours:[
+      {n:'The Haute Route', t:'alpine', u:BASE+'/alpine/switzerland/the-haute-route'},
+      {n:'The Haute Route Guided Walk', t:'alpine', u:BASE+'/alpine/switzerland/the-haute-route-guided-walk'},
+      {n:'Haute Route - Switzerland Guided Hike', t:'alpine', u:BASE+'/alpine/switzerland/haute-route-switzerland-guided-hike'},
+      {n:'The Alpine Pass Route', t:'alpine', u:BASE+'/alpine/switzerland/the-alpine-pass-route'},
+      {n:'Highlights of The Alpine Pass Route', t:'alpine', u:BASE+'/alpine/switzerland/highlights-of-the-alpine-pass-route'},
+      {n:'Via Alpina Switzerland Hike', t:'alpine', u:BASE+'/alpine/switzerland/via-alpina-switzerland-hike'},
+      {n:'Meiringen: Panoramas of the Swiss Alps', t:'alpine', u:BASE+'/alpine/switzerland/meiringen-panoramas-of-the-swiss-alps'},
+      {n:'Meiringen: Panoramas of the Swiss Alps - 8 Days', t:'alpine', u:BASE+'/alpine/switzerland/meiringen-panoramas-of-the-swiss-alps-8-days'},
+      {n:'Kandersteg & the Wildstrubel Circuit', t:'alpine', u:BASE+'/alpine/switzerland/kandersteg-the-wildstrubel-circuit'},
+      {n:'The Bernese Oberland and Reichenbach Falls', t:'alpine', u:BASE+'/alpine/switzerland/the-bernese-oberland-and-reichenbach-falls'},
+      {n:'Grand Combin Guided Hike', t:'alpine', u:BASE+'/alpine/switzerland/grand-combin-guided-hike'},
+      {n:'High Trails of the Bernese Oberland Guided Hike', t:'alpine', u:BASE+'/alpine/switzerland/high-trails-of-the-bernese-oberland-guided-hike'},
+      {n:'Matterhorn Circuit Guided Hike', t:'alpine', u:BASE+'/alpine/switzerland/matterhorn-circuit-guided-hike'},
+      {n:'Tour de Monte Rosa Guided Hike', t:'alpine', u:BASE+'/alpine/switzerland/tour-de-monte-rosa-guided-hike'},
+      {n:'Cycle Across Switzerland: Basel to Ticino', t:'cycling', u:BASE+'/cycling/switzerland/cycle-across-switzerland-to-italy-basel-to-ticino'},
+      {n:'Swiss Lakes Cycle', t:'cycling', u:BASE+'/cycling/switzerland/swiss-lakes-cycle'},
+      {n:'Via Rhôna Cycle Path: Geneva to the Mediterranean', t:'cycling', u:BASE+'/cycling/switzerland/via-rhona-cycle-path-geneva-to-the-mediterranean'},
+      {n:'Lombardy Alps Cycle to Lake Como', t:'cycling', u:BASE+'/cycling/switzerland/lombardy-alps-cycle-to-lake-como'},
+    ]},
+
+  { id:'at_austria', name:'Austria', country:'Austria', lat:47.50, lng:13.30,
+    types:['alpine','cycling'],
+    desc:'Austrian lakes, Dachstein glaciers and the legendary Alpe Adria cycle path from Salzburg to the Adriatic — classic Alpine adventure.',
+    hub: BASE+'/destinations/europe/austria',
+    tours:[
+      {n:'Hiking Austria\'s Lakes & Dachstein Alps', t:'alpine', u:BASE+'/alpine/austria/hiking-austrias-lakes-dachstein-alps'},
+      {n:'Austrian Lakes Hike & Bike', t:'alpine', u:BASE+'/alpine/austria/austrian-lakes-hike-and-bike'},
+      {n:'Austrian Lakes Walk', t:'walking', u:BASE+'/walking/austria/austrian-lakes-walk'},
+      {n:'Austrian Lakes Walk in Comfort', t:'walking', u:BASE+'/walking/austria/austrian-lakes-walk-in-comfort'},
+      {n:'Innsbruck to Salzburg Hike & Bike', t:'alpine', u:BASE+'/alpine/austria/innsbruck-to-salzburg-hike-and-bike'},
+      {n:'The Lechweg Trail Hike', t:'alpine', u:BASE+'/alpine/austria/the-lechweg-trail-hike-austrian-alps-to-bavaria'},
+      {n:'Alpe Adria Cycle Path - Salzburg to Grado', t:'cycling', u:BASE+'/cycling/austria/alpe-adria-cycle-path-salzburg-to-grado'},
+      {n:'Alpe Adria Cycle Path Rambler - Salzburg to Grado', t:'cycling', u:BASE+'/cycling/austria/alpe-adria-cycle-path-rambler-salzburg-to-grado'},
+      {n:'Alpe Adria Trail Hike - the Julian Alps to Italy', t:'alpine', u:BASE+'/alpine/austria/alpe-adria-trail-hike-the-julian-alps-to-italy'},
+      {n:'Salzburg to Vienna Cycle', t:'cycling', u:BASE+'/cycling/austria/salzburg-to-vienna-cycle'},
+      {n:'Vienna to Trieste by E-Bike', t:'cycling', u:BASE+'/cycling/austria/vienna-to-trieste-by-e-bike'},
+      {n:'Munich to Salzburg Cycle', t:'cycling', u:BASE+'/cycling/germany/munich-to-salzburg-cycle'},
+    ]},
+
+  // ── GERMANY ──
+  { id:'de_germany', name:'Germany', country:'Germany', lat:50.00, lng:10.50,
+    types:['cycling','boat'],
+    desc:'Bavaria\'s castles, the Rhine valley, Berlin by bike and the iconic Moselle wine route — Germany is one of Europe\'s great cycling nations.',
+    hub: BASE+'/destinations/europe/germany',
+    tours:[
+      {n:'Hiking in Bavaria', t:'walking', u:BASE+'/walking/germany/hiking-in-bavaria'},
+      {n:'Bavaria by Bike: Castles & Breweries', t:'cycling', u:BASE+'/cycling/germany/bavaria-by-bike-castles-and-breweries'},
+      {n:'Walking in Bavaria: King Ludwig\'s Way', t:'walking', u:BASE+'/walking/germany/walking-in-bavaria-king-ludwigs-way'},
+      {n:'Rhine Valley Bike & Barge', t:'boat', u:BASE+'/bike-and-boat/germany/rhine-valley-bike-and-barge'},
+      {n:'Rhine River and Castles Walk', t:'walking', u:BASE+'/walking/germany/rhine-river-and-castles-walk'},
+      {n:'Rhine Valley Cycle', t:'cycling', u:BASE+'/cycling/germany/rhine-valley-cycle'},
+      {n:'Cologne to Mainz by Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/germany/cologne-to-mainz-by-bike-and-barge'},
+      {n:'Mainz to Strasbourg by Bike and Barge', t:'boat', u:BASE+'/bike-and-boat/germany/mainz-to-strasbourg-by-bike-and-barge'},
+      {n:'Moselle Bike Path Cycle: Trier to Koblenz', t:'cycling', u:BASE+'/cycling/germany/moselle-bike-path-cycle-trier-to-koblenz'},
+      {n:'Moselle Bike & Barge', t:'boat', u:BASE+'/bike-and-boat/germany/moselle-bike-and-barge'},
+      {n:'Berlin Wall Trail Cycle', t:'cycling', u:BASE+'/cycling/germany/berlin-wall-trail-cycle'},
+      {n:'Berlin to Copenhagen by Bike', t:'cycling', u:BASE+'/cycling/germany/berlin-to-copenhagen-by-bike'},
+      {n:'Berlin Bike & Barge', t:'boat', u:BASE+'/bike-and-boat/germany/berlin-bike-and-barge'},
+    ]},
+
+  // ── NETHERLANDS & BELGIUM ──
+  { id:'nl_be', name:'Netherlands & Belgium', country:'Netherlands / Belgium', lat:51.90, lng:4.50,
+    types:['cycling','boat'],
+    desc:'Tulip fields, canal towpaths and the flat cycling paradise of the Low Countries — from Amsterdam to Bruges by bike or barge.',
+    hub: BASE+'/destinations/europe/netherlands',
+    tours:[
+      {n:'Amsterdam to Bruges Bike & Barge - Deluxe', t:'boat', u:BASE+'/bike-and-boat/netherlands/amsterdam-to-bruges-bike-and-barge-deluxe'},
+      {n:'Amsterdam to Bruges Bike & Barge - Comfort', t:'boat', u:BASE+'/bike-and-boat/netherlands/amsterdam-to-bruges-bike-and-barge-comfort'},
+      {n:'Bruges to Amsterdam Bike & Barge - Deluxe', t:'boat', u:BASE+'/bike-and-boat/netherlands/bruges-to-amsterdam-bike-and-barge-deluxe'},
+      {n:'Cycle Amsterdam to Bruges', t:'cycling', u:BASE+'/cycling/netherlands/cycle-amsterdam-to-bruges'},
+      {n:'Cycle Bruges to Amsterdam', t:'cycling', u:BASE+'/cycling/belgium/cycle-bruges-to-amsterdam'},
+      {n:'Belgium Cycle - Brussels to Bruges', t:'cycling', u:BASE+'/cycling/belgium/belgium-cycle-brussels-to-bruges'},
+      {n:'Belgium Beer Cycle', t:'cycling', u:BASE+'/cycling/belgium/belgium-beer-cycle'},
+      {n:'Dutch Waterways Cycle', t:'cycling', u:BASE+'/cycling/netherlands/dutch-waterways-cycle'},
+      {n:'Classic Holland Cycle', t:'cycling', u:BASE+'/cycling/netherlands/classic-holland-cycle'},
+      {n:'Tulip Tour Bike & Barge - Deluxe', t:'boat', u:BASE+'/bike-and-boat/netherlands/tulip-tour-bike-and-barge-deluxe'},
+      {n:'Tulip Cycle', t:'cycling', u:BASE+'/cycling/netherlands/tulip-cycle'},
+      {n:'Amsterdam to Brussels by Bike', t:'cycling', u:BASE+'/cycling/netherlands/amsterdam-to-brussels-by-bike'},
+    ]},
+
+  // ── DENMARK & SCANDINAVIA ──
+  { id:'scan', name:'Scandinavia & Nordic', country:'Scandinavia', lat:60.00, lng:10.00,
+    types:['cycling','walking'],
+    desc:'Norway\'s dramatic fjords, Sweden\'s islands and cycle routes, and Denmark\'s North Zealand coast — Nordic Europe at its most spectacular.',
+    hub: BASE+'/destinations/europe/scandinavia',
+    tours:[
+      {n:'Hiking Norway\'s Fjordland', t:'walking', u:BASE+'/walking/norway/hiking-norways-fjordland'},
+      {n:'Norway - Oslo Fjord Cycle', t:'cycling', u:BASE+'/cycling/norway/norway-oslo-fjord-cycle'},
+      {n:'Sweden: Archipelago Cycle', t:'cycling', u:BASE+'/cycling/sweden/sweden-archipelago-cycle'},
+      {n:'Sweden: Island Hopping Walk', t:'walking', u:BASE+'/walking/sweden/sweden-island-hopping-walk'},
+      {n:'Sweden: Baltic Coastal Walk', t:'walking', u:BASE+'/walking/sweden/sweden-baltic-coastal-walk'},
+      {n:'Sweden: Land of Lakes and Castles Cycle', t:'cycling', u:BASE+'/cycling/sweden/sweden-land-of-lakes-and-castles-cycle'},
+      {n:'Denmark North Zealand Cycle', t:'cycling', u:BASE+'/cycling/denmark/denmark-north-zealand-cycle'},
+      {n:'Copenhagen to Malmo Cycle', t:'cycling', u:BASE+'/cycling/denmark/cycle-copenhagen-to-malmo'},
+      {n:'Berlin to Copenhagen by Bike', t:'cycling', u:BASE+'/cycling/germany/berlin-to-copenhagen-by-bike'},
+      {n:'Finland\'s Turku Archipelago Cycle', t:'cycling', u:BASE+'/cycling/finland/finlands-turku-archipelago-cycle'},
+    ]},
+
+  { id:'iceland', name:'Iceland', country:'Iceland', lat:64.80, lng:-18.00,
+    types:['walking'],
+    desc:'The Laugavegur Trail crosses Iceland\'s volcanic highlands — a landscape of geysers, glaciers, hot springs and lava fields unlike anywhere on earth.',
+    hub: BASE+'/destinations/europe/iceland',
+    tours:[
+      {n:'Laugavegur Trail Self Guided Walk', t:'walking', u:BASE+'/walking/iceland/laugavegur-trail-self-guided-walk'},
+      {n:'Laugavegur Trail Guided Walk', t:'walking', u:BASE+'/walking/iceland/laugavegur-trail-guided-walk'},
+      {n:'Laugavegur Trail Encompassed', t:'walking', u:BASE+'/walking/iceland/laugavegur-trail-encompassed'},
+      {n:'Iceland: Walking in the footsteps of Thor', t:'walking', u:BASE+'/walking/iceland/iceland-walking-in-the-footsteps-of-thor'},
+    ]},
+
+  // ── CZECH / POLAND / BALTICS ──
+  { id:'cz_pl', name:'Czech Republic & Poland', country:'Czech Republic / Poland', lat:50.50, lng:17.00,
+    types:['cycling'],
+    desc:'Prague to Vienna, Prague to Krakow and the dramatic Carpathian mountain trails of Poland — Central Europe by bike.',
+    hub: BASE+'/destinations/europe',
+    tours:[
+      {n:'Prague & the Bohemian Countryside Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-and-the-bohemian-countryside-cycle'},
+      {n:'Prague to Dresden Self Guided Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-to-dresden-self-guided-cycle'},
+      {n:'Prague to Vienna Self Guided Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-to-vienna-self-guided-cycle'},
+      {n:'Prague to Vienna Guided Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-to-vienna-guided-cycle'},
+      {n:'Czech Castles Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/czech-castles-cycle'},
+      {n:'Prague to Krakow Self Guided Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-to-krakow-self-guided-cycle'},
+      {n:'Prague to Krakow Guided Cycle', t:'cycling', u:BASE+'/cycling/czech-republic/prague-to-krakow-guided-cycle'},
+      {n:'Poland: Carpathian Mountains Guided Hike', t:'walking', u:BASE+'/walking/poland/poland-carpathian-mountains-guided-hike'},
+      {n:'Poland: Pieniny and Tatra Mountains Hike', t:'walking', u:BASE+'/walking/poland/poland-pieniny-and-tatra-mountains-hike'},
+    ]},
+
+  { id:'baltics', name:'Baltic States', country:'Estonia / Latvia / Lithuania', lat:56.50, lng:24.00,
+    types:['cycling'],
+    desc:'Cycle the Baltic coast and the ancient Amber Road through Estonia, Latvia and Lithuania — a journey through history and unspoilt landscapes.',
+    hub: BASE+'/destinations/europe',
+    tours:[
+      {n:'Baltic Sea Coast Cycle', t:'cycling', u:BASE+'/cycling/germany/baltic-sea-coast-cycle'},
+      {n:'Treasures of the Baltic by Bike Guided Cycle', t:'cycling', u:BASE+'/cycling/estonia/treasures-of-the-baltic-by-bike-guided-cycle'},
+      {n:'Treasures of the Baltics Self Guided', t:'cycling', u:BASE+'/cycling/estonia/treasures-of-the-baltics-self-guided'},
+      {n:'Lithuania and Latvia Self Guided Cycle Explorer', t:'cycling', u:BASE+'/cycling/lithuania/lithuania-and-latvia-self-guided-cycle-explorer'},
+      {n:'Lithuania and Poland Guided Cycle', t:'cycling', u:BASE+'/cycling/lithuania/lithuania-and-poland-guided-cycle'},
+      {n:'Estonia to Lithuania Self Guided Cycle', t:'cycling', u:BASE+'/cycling/estonia/estonia-to-lithuania-self-guided-cycle'},
+    ]},
+
+  // ── DANUBE ──
+  { id:'danube', name:'Danube Valley', country:'Central Europe', lat:48.20, lng:16.40,
+    types:['cycling','boat'],
+    desc:'The classic Danube Cycle Path from Passau to Vienna — Europe\'s most popular long-distance cycle route — plus bike and boat adventures through Hungary and beyond.',
+    hub: BASE+'/cycling/danube-cycle-path',
+    tours:[
+      {n:'Blue Danube Cycle to Vienna', t:'cycling', u:BASE+'/cycling/austria/blue-danube-cycle-to-vienna'},
+      {n:'Blue Danube Cycle to Vienna in Comfort', t:'cycling', u:BASE+'/cycling/austria/blue-danube-cycle-to-vienna-in-comfort'},
+      {n:'Passau to Vienna Cycle Deluxe', t:'cycling', u:BASE+'/cycling/austria/passau-to-vienna-cycle-deluxe'},
+      {n:'Passau to Vienna by Bike', t:'cycling', u:BASE+'/cycling/austria/passau-to-vienna-by-bike'},
+      {n:'Danube Cycle', t:'cycling', u:BASE+'/cycling/austria/danube-cycle'},
+      {n:'The Danube by Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/austria/the-danube-by-bike-and-boat'},
+      {n:'Danube Explorer to Budapest Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/austria/danube-explorer-to-budapest-bike-and-boat'},
+      {n:'Hungarian Rhapsody', t:'cycling', u:BASE+'/cycling/hungary/hungarian-rhapsody'},
+      {n:'Danube to the Iron Gates Bike and Boat', t:'boat', u:BASE+'/bike-and-boat/romania/danube-to-the-iron-gates-bike-and-boat'},
+      {n:'Danube Delta By Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/romania/danube-delta-by-bike-and-boat'},
+      {n:'The German Danube', t:'cycling', u:BASE+'/cycling/germany/the-german-danube'},
+    ]},
+
+  // ── CROATIA & BALKANS ──
+  { id:'hr_croatia', name:'Croatia & Dalmatia', country:'Croatia', lat:43.50, lng:16.50,
+    types:['boat','walking'],
+    desc:'Sail and cycle the Dalmatian islands, kayak through island-studded bays, or walk the dramatic coast and canyons of Croatia.',
+    hub: BASE+'/destinations/europe/croatia',
+    tours:[
+      {n:'Croatia Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/croatia/croatia-bike-and-boat'},
+      {n:'Croatia Bike & Boat - Deluxe', t:'boat', u:BASE+'/bike-and-boat/croatia/croatia-bike-and-boat-deluxe'},
+      {n:'North Dalmatia Bike and Boat', t:'boat', u:BASE+'/bike-and-boat/croatia/north-dalmatia-bike-and-boat'},
+      {n:'Kvarner Bay Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/croatia/kvarner-bay-bike-and-boat'},
+      {n:'Dalmatian Coast and Dubrovnik Bike and Boat', t:'boat', u:BASE+'/bike-and-boat/croatia/dalmatian-coast-and-dubrovnik-bike-and-boat'},
+      {n:'Dubrovnik and Islands Walk', t:'walking', u:BASE+'/walking/croatia/dubrovnik-and-islands-walk'},
+      {n:'Croatia Coast and Canyons Guided Walk', t:'walking', u:BASE+'/walking/croatia/croatia-coast-and-canyons-guided-walk'},
+      {n:'Croatia Family Adventure', t:'boat', u:BASE+'/bike-and-boat/croatia/croatia-family-adventure'},
+    ]},
+
+  { id:'balkans', name:'Balkans & Slovenia', country:'Balkans', lat:42.80, lng:19.50,
+    types:['walking','cycling'],
+    desc:'The Peaks of the Balkans, Julian Alps of Slovenia and the wild mountains of Albania and Montenegro — some of Europe\'s most dramatic and least-visited walking.',
+    hub: BASE+'/destinations/europe/balkans',
+    tours:[
+      {n:'Peaks of the Balkans Guided Hike', t:'walking', u:BASE+'/walking/balkans/peaks-of-the-balkans-guided-hike'},
+      {n:'Peaks of the Balkans Highlights', t:'walking', u:BASE+'/walking/balkans/peaks-of-the-balkans-highlights'},
+      {n:'Balkans High Trails and Culture Guided Hike', t:'walking', u:BASE+'/walking/balkans/balkans-high-trails-and-culture-guided-hike'},
+      {n:'High Scardus Trail Guided Hike', t:'walking', u:BASE+'/walking/balkans/high-scardus-trail-guided-hike'},
+      {n:'Albania Coastal Walk', t:'walking', u:BASE+'/walking/albania/albania-coastal-walk'},
+      {n:'Albania Coast Guided Walk', t:'walking', u:BASE+'/walking/albania/albania-coast-guided-walk'},
+      {n:'Montenegro to Albania Coastal Cycle', t:'cycling', u:BASE+'/cycling/montenegro/montenegro-to-albania-coastal-cycle'},
+      {n:'Hiking in the Julian Alps', t:'alpine', u:BASE+'/alpine/slovenia/hiking-in-the-julian-alps'},
+      {n:'Slovenia Cycle - Julian Alps to the Adriatic', t:'cycling', u:BASE+'/cycling/slovenia/slovenia-cycle-julian-alps-to-the-adriatic'},
+      {n:'Lake Bled and the Julian Alps Walk', t:'walking', u:BASE+'/walking/slovenia/lake-bled-and-the-julian-alps-walk'},
+      {n:'Juliana Trail North Walk', t:'walking', u:BASE+'/walking/slovenia/juliana-trail-north-walk'},
+      {n:'Juliana Trail South Walk', t:'walking', u:BASE+'/walking/slovenia/juliana-trail-south-walk'},
+    ]},
+
+  // ── GREECE & TURKEY ──
+  { id:'gr_greece', name:'Greece', country:'Greece', lat:37.50, lng:23.00,
+    types:['boat','walking'],
+    desc:'Sail between Greek islands by bike and boat, walk the gorges of Crete, or explore ancient Corfu — Greece for active travellers.',
+    hub: BASE+'/destinations/europe/greece',
+    tours:[
+      {n:'Greek Islands Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/greece/greek-islands-bike-and-boat'},
+      {n:'Ionian Islands Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/greece/ionian-islands-bike-and-boat'},
+      {n:'Peloponnese and Saronic Islands Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/greece/peloponnese-and-saronic-islands-bike-and-boat'},
+      {n:'South Aegean Bike & Boat', t:'boat', u:BASE+'/bike-and-boat/greece/south-aegean-bike-and-boat'},
+      {n:'Santorini and Crete Walk', t:'walking', u:BASE+'/walking/greece/santorini-and-crete-walk'},
+      {n:'Exploring Crete on Foot', t:'walking', u:BASE+'/walking/greece/exploring-crete-on-foot'},
+      {n:'Highlights of the Corfu Trail Self Guided Walk', t:'walking', u:BASE+'/walking/greece/highlights-of-the-corfu-trail-self-guided-walk'},
+      {n:'Ancient Greece on Foot', t:'walking', u:BASE+'/walking/greece/ancient-greece-on-foot'},
+    ]},
+
+  { id:'tr_turkey', name:'Türkiye (Turkey)', country:'Türkiye', lat:36.80, lng:29.50,
+    types:['walking','boat'],
+    desc:'The Lycian Way, Cappadocia\'s volcanic landscape and the turquoise Turkish coast by gulet — ancient civilisations and spectacular scenery on foot.',
+    hub: BASE+'/destinations/europe/turkey',
+    tours:[
+      {n:'Lycian Guided Walk', t:'walking', u:BASE+'/walking/turkey/lycian-guided-walk'},
+      {n:'Lycian Way West', t:'walking', u:BASE+'/walking/turkey/lycian-way-west'},
+      {n:'Lycian Way East Walk', t:'walking', u:BASE+'/walking/turkey/lycian-way-east-walk'},
+      {n:'Cappadocia on Foot', t:'walking', u:BASE+'/walking/turkey/cappadocia-on-foot'},
+      {n:'Cappadocia Guided Walk', t:'walking', u:BASE+'/walking/turkey/cappadocia-guided-walk'},
+      {n:'St Paul Trail Guided Walk', t:'walking', u:BASE+'/walking/turkey/st-paul-trail-guided-walk'},
+      {n:'Lycian Coast Boat & Bike', t:'boat', u:BASE+'/bike-and-boat/turkey/lycian-coast-boat-and-bike'},
+      {n:'Turkey Walk & Cruise', t:'boat', u:BASE+'/bike-and-boat/turkey/turkey-walk-and-cruise'},
+    ]},
+
+  // ── IRELAND & BRITISH ISLES ──
+  { id:'ie_ireland', name:'Ireland', country:'Ireland', lat:53.20, lng:-7.90,
+    types:['walking'],
+    desc:'The Ring of Kerry, Dingle Way, Wicklow Mountains and the wild Atlantic coast — Ireland rewards walkers with extraordinary scenery and legendary hospitality.',
+    hub: BASE+'/destinations/europe/ireland',
+    tours:[
+      {n:'Ring of Kerry Walk', t:'walking', u:BASE+'/walking/ireland/ring-of-kerry-walk'},
+      {n:'Kerry Camino Walk', t:'camino', u:BASE+'/camino/ireland/kerry-camino-walk'},
+      {n:'Exploring the Dingle Way', t:'walking', u:BASE+'/walking/ireland/exploring-the-dingle-way'},
+      {n:'Dingle Peninsula Walk', t:'walking', u:BASE+'/walking/ireland/dingle-peninsula-walk'},
+      {n:'Exploring the Aran Islands and Connemara', t:'walking', u:BASE+'/walking/ireland/exploring-the-aran-islands-and-connemara'},
+      {n:'The Wicklow Way - 7 Days', t:'walking', u:BASE+'/walking/ireland/the-wicklow-way-7-days'},
+      {n:'The Wicklow Way - 9 Days', t:'walking', u:BASE+'/walking/ireland/the-wicklow-way-9-days'},
+      {n:'Exploring the Wicklow Way', t:'walking', u:BASE+'/walking/ireland/exploring-the-wicklow-way'},
+      {n:'Walking in West Cork - The Sheep\'s Head Way', t:'walking', u:BASE+'/walking/ireland/walking-in-west-cork-the-sheeps-head-way'},
+      {n:'Causeway Coast & Antrim Glens Hike - 8 Days', t:'walking', u:BASE+'/walking/ireland/causeway-coast-antrim-glens-hike-8-days'},
+      {n:'Giant\'s Causeway & Rathlin Island Hike - 6 Days', t:'walking', u:BASE+'/walking/ireland/giants-causeway-rathlin-island-hike-6-days'},
+    ]},
+
+  { id:'gb_scotland', name:'Scotland', country:'Scotland', lat:56.70, lng:-4.70,
+    types:['walking','cycling'],
+    desc:'The West Highland Way, Great Glen Way, Rob Roy Way and Scottish island cycling — Scotland\'s landscapes are made for long-distance adventure.',
+    hub: BASE+'/destinations/europe/scotland',
+    tours:[
+      {n:'Walking the West Highland Way - 8 Days', t:'walking', u:BASE+'/walking/scotland/walking-the-west-highland-way-8-days'},
+      {n:'Walking the West Highland Way - 10 Days', t:'walking', u:BASE+'/walking/scotland/walking-the-west-highland-way-10-days'},
+      {n:'Exploring the West Highland Way', t:'walking', u:BASE+'/walking/scotland/exploring-the-west-highland-way'},
+      {n:'The Great Glen Way', t:'walking', u:BASE+'/walking/scotland/the-great-glen-way'},
+      {n:'Highlights of the Great Glen Way', t:'walking', u:BASE+'/walking/scotland/highlights-of-the-great-glen-way'},
+      {n:'Rob Roy Way', t:'walking', u:BASE+'/walking/scotland/rob-roy-way'},
+      {n:'Exploring the Fife Coastal Path', t:'walking', u:BASE+'/walking/scotland/exploring-the-fife-coastal-path'},
+      {n:'Edinburgh & The Fife Coastal Path Hike', t:'walking', u:BASE+'/walking/scotland/edinburgh-the-fife-coastal-path-hike'},
+      {n:'Hiking the Scottish Highlands Tour', t:'walking', u:BASE+'/walking/scotland/hiking-the-scottish-highlands-tour'},
+      {n:'Exploring the West Coast of Scotland & the Isle of Skye', t:'walking', u:BASE+'/walking/scotland/exploring-the-west-coast-of-scotland-and-the-isle-of-skye'},
+      {n:'Scottish Highlands Cycle', t:'cycling', u:BASE+'/cycling/scotland/scottish-highlands-cycle'},
+      {n:'Isle of Arran Coastal Way', t:'walking', u:BASE+'/walking/scotland/isle-of-arran-coastal-way'},
+    ]},
+
+  { id:'gb_england', name:'England', country:'England', lat:54.00, lng:-2.00,
+    types:['walking'],
+    desc:'The Coast to Coast, Pennine Way, South West Coast Path and a dozen national trails — England has some of the world\'s finest long-distance walking.',
+    hub: BASE+'/destinations/europe/england',
+    tours:[
+      {n:'Coast to Coast Walk - 15 Days', t:'walking', u:BASE+'/walking/england/coast-to-coast-walk-15-days'},
+      {n:'Coast to Coast Guided Walk - 17 Days', t:'walking', u:BASE+'/walking/england/coast-to-coast-guided-walk-17-days'},
+      {n:'The Full Pennine Way', t:'walking', u:BASE+'/walking/england/the-full-pennine-way'},
+      {n:'The Cumbria Way - 8 Days', t:'walking', u:BASE+'/walking/england/the-cumbria-way-8-days'},
+      {n:'The Dales Way', t:'walking', u:BASE+'/walking/england/the-dales-way'},
+      {n:'The Cleveland Way', t:'walking', u:BASE+'/walking/england/the-cleveland-way'},
+      {n:'Cotswold Way', t:'walking', u:BASE+'/walking/england/cotswold-way'},
+      {n:'Hadrian\'s Wall Walk From Whitley Bay - 8 Days', t:'walking', u:BASE+'/walking/england/hadrians-wall-walk-from-whitley-bay-8-days'},
+      {n:'The South Downs Way', t:'walking', u:BASE+'/walking/england/the-south-downs-way'},
+      {n:'South West Coast Path: Padstow to St Ives - 8 Days', t:'walking', u:BASE+'/walking/england/south-west-coast-path-padstow-to-st-ives-8-days'},
+      {n:'St Cuthbert\'s Way - 8 Days', t:'walking', u:BASE+'/walking/england/st-cuthberts-way-8-days'},
+      {n:'Thames Path East', t:'walking', u:BASE+'/walking/england/thames-path-east'},
+      {n:'Pembrokeshire Coast Path Hike', t:'walking', u:BASE+'/walking/wales/exploring-the-pembrokeshire-coast-path'},
+      {n:'Hiking the Snowdonia Slate Trail', t:'walking', u:BASE+'/walking/wales/hiking-the-snowdonia-slate-trail'},
+    ]},
+
+  // ── CYPRUS ──
+  { id:'cy_cyprus', name:'Cyprus', country:'Cyprus', lat:34.90, lng:33.00,
+    types:['walking'],
+    desc:'Year-round walking in the Troodos Mountains, Byzantine monasteries and the warm Mediterranean coast — Cyprus is a wonderfully compact walking destination.',
+    hub: BASE+'/destinations/europe/cyprus',
+    tours:[
+      {n:'Cyprus Winter Walking', t:'walking', u:BASE+'/walking/cyprus/cyprus-winter-walking'},
+      {n:'Walking the Trails of the Troodos Mountains', t:'walking', u:BASE+'/walking/cyprus/walking-the-trails-of-the-troodos-mountains'},
+      {n:'Cyprus Walking: Troodos Mountains & the Mediterranean Coast', t:'walking', u:BASE+'/walking/cyprus/cyprus-walking-troodos-mountains-the-mediterranean-coast'},
+      {n:'Cappadocia on Foot - 5 Days', t:'walking', u:BASE+'/walking/turkey/cappadocia-on-foot-5-days'},
+    ]},
+];
+
+// ── Type colours and labels ──
+var TYPE_COLOR = { walking:'#1d6746', cycling:'#e8500a', camino:'#6b21a8', boat:'#0369a1', alpine:'#0c4a6e' };
+var TYPE_LABEL = { walking:'Walking', cycling:'Cycling', camino:'Camino', boat:'Bike & Boat', alpine:'Alpine' };
+var TYPE_TAG   = { walking:'tag-walk', cycling:'tag-cycle', camino:'tag-camino', boat:'tag-boat', alpine:'tag-alpine' };
+var TYPE_EMOJI = { walking:'🚶', cycling:'🚴', camino:'🛤️', boat:'⛵', alpine:'🏔️' };
+
+// ── Images per destination ──
+var PHOTOS = {
+  fr_alsace:'https://www.utracks.com/croppedImages/Utracks/France/Alsace/Alsace-Village_Eguisheim-3802939-1920px-16x7.jpg',
+  fr_paris:'https://www.utracks.com/croppedImages/Utracks/France/Paris/Paris-eiffel-tower-3802932-1920px-16x7.jpg',
+  fr_normandy:'https://www.utracks.com/croppedImages/Utracks/France/Normandy/Normandy-coast-3802940-1920px-16x7.jpg',
+  fr_champagne:'https://www.utracks.com/croppedImages/Utracks/France/Burgundy/Burgundy-vineyards-2408620-1920px-16x7.jpg',
+  fr_loire:'https://www.utracks.com/croppedImages/Utracks/France/Loire-Valley/Loire-Chateau-2-3802943-1920px-16x7.jpg',
+  fr_bordeaux:'https://www.utracks.com/croppedImages/Utracks/France/Bordeaux/Bordeaux-vineyard-2408636-1920px-16x7.jpg',
+  fr_provence:'https://www.utracks.com/croppedImages/Utracks/France/Provence/Provence-Lavender-2408642-1920px-16x7.jpg',
+  fr_pyrenees:'https://www.utracks.com/croppedImages/Utracks/France/Pyrenees/Pyrenees-2408644-1920px-16x7.jpg',
+  fr_alpsmb:'https://www.utracks.com/croppedImages/Utracks/France/Alps/Mont-Blanc-TMB-2408646-1920px-16x7.jpg',
+  fr_cevennes:'https://www.utracks.com/croppedImages/Utracks/France/Cevennes/cevennes-2408648-1920px-16x7.jpg',
+  es_camino:'https://www.utracks.com/croppedImages/Utracks/Spain/Camino/Camino-Santiago-Cathedral-2408656-1920px-16x7.jpg',
+  es_north:'https://www.utracks.com/croppedImages/Utracks/Spain/Picos-de-Europa/Picos-Europa-2408658-1920px-16x7.jpg',
+  es_andalucia:'https://www.utracks.com/croppedImages/Utracks/Spain/Andalucia/Andalucia-2408660-1920px-16x7.jpg',
+  es_catalonia:'https://www.utracks.com/croppedImages/Utracks/Spain/Catalonia/Catalonia-2408662-1920px-16x7.jpg',
+  es_canaries:'https://www.utracks.com/croppedImages/Utracks/Spain/Canaries/Tenerife-Teide-2408664-1920px-16x7.jpg',
+  pt_camino:'https://www.utracks.com/croppedImages/Utracks/Portugal/Camino/Portuguese-Camino-2408666-1920px-16x7.jpg',
+  pt_north:'https://www.utracks.com/croppedImages/Utracks/Portugal/Douro/Douro-Valley-2408668-1920px-16x7.jpg',
+  pt_madeira:'https://www.utracks.com/croppedImages/Utracks/Portugal/Madeira/Madeira-levada-2408670-1920px-16x7.jpg',
+  it_tuscany:'https://www.utracks.com/croppedImages/Utracks/Italy/Tuscany/Tuscany-Cypress-2408674-1920px-16x7.jpg',
+  it_amalfi:'https://www.utracks.com/croppedImages/Utracks/Italy/Amalfi-Coast/Amalfi-Coast-2408676-1920px-16x7.jpg',
+  it_dolomites:'https://www.utracks.com/croppedImages/Utracks/Italy/Dolomites/Dolomites-2408678-1920px-16x7.jpg',
+  it_lakes:'https://www.utracks.com/croppedImages/Utracks/Italy/Lake-Como/Lake-Como-2408680-1920px-16x7.jpg',
+  it_cinque:'https://www.utracks.com/croppedImages/Utracks/Italy/Cinque-Terre/Cinque-Terre-2408682-1920px-16x7.jpg',
+  it_rome:'https://www.utracks.com/croppedImages/Utracks/Italy/Rome/Rome-2408684-1920px-16x7.jpg',
+  it_sicily:'https://www.utracks.com/croppedImages/Utracks/Italy/Sicily/Sicily-2408686-1920px-16x7.jpg',
+  ch_swiss:'https://www.utracks.com/croppedImages/Utracks/Switzerland/Matterhorn/Matterhorn-2408688-1920px-16x7.jpg',
+  at_austria:'https://www.utracks.com/croppedImages/Utracks/Austria/Austrian-Lakes/Austrian-Lakes-2408690-1920px-16x7.jpg',
+  de_germany:'https://www.utracks.com/croppedImages/Utracks/Germany/Rhine/Rhine-Valley-2408692-1920px-16x7.jpg',
+  nl_be:'https://www.utracks.com/croppedImages/Utracks/Netherlands/Tulips/Tulip-fields-2408694-1920px-16x7.jpg',
+  scan:'https://www.utracks.com/croppedImages/Utracks/Norway/Fjords/Norway-Fjord-2408696-1920px-16x7.jpg',
+  iceland:'https://www.utracks.com/croppedImages/Utracks/Iceland/Laugavegur/Iceland-Laugavegur-2408698-1920px-16x7.jpg',
+  cz_pl:'https://www.utracks.com/croppedImages/Utracks/Czech-Republic/Prague/Prague-2408700-1920px-16x7.jpg',
+  baltics:'https://www.utracks.com/croppedImages/Utracks/Estonia/Tallinn/Tallinn-2408702-1920px-16x7.jpg',
+  danube:'https://www.utracks.com/croppedImages/Utracks/Danube/Passau/Danube-Passau-2408704-1920px-16x7.jpg',
+  hr_croatia:'https://www.utracks.com/croppedImages/Utracks/Croatia/Dalmatia/Croatia-Dalmatia-2408706-1920px-16x7.jpg',
+  balkans:'https://www.utracks.com/croppedImages/Utracks/Balkans/Peaks/Peaks-Balkans-2408708-1920px-16x7.jpg',
+  gr_greece:'https://www.utracks.com/croppedImages/Utracks/Greece/Greek-Islands/Greek-Islands-2408710-1920px-16x7.jpg',
+  tr_turkey:'https://www.utracks.com/croppedImages/Utracks/Turkey/Lycian/Lycian-Way-2408712-1920px-16x7.jpg',
+  ie_ireland:'https://www.utracks.com/croppedImages/Utracks/Ireland/Dingle/Dingle-Peninsula-2408714-1920px-16x7.jpg',
+  gb_scotland:'https://www.utracks.com/croppedImages/Utracks/Scotland/West-Highland-Way/West-Highland-Way-2408716-1920px-16x7.jpg',
+  gb_england:'https://www.utracks.com/croppedImages/Utracks/England/Coast-to-Coast/Coast-to-Coast-2408718-1920px-16x7.jpg',
+  cy_cyprus:'https://www.utracks.com/croppedImages/Utracks/Cyprus/Troodos/Cyprus-Troodos-2408720-1920px-16x7.jpg',
+};
+
+// Fallback images by type (known good UTracks images)
+var FALLBACKS = {
+  walking: 'https://www.utracks.com/croppedImages/Utracks/Walking/walking-europe-hero-2408720-1920px-16x7.jpg',
+  cycling: 'https://www.utracks.com/croppedImages/Utracks/Cycling/cycling-europe-hero-2408722-1920px-16x7.jpg',
+  camino:  'https://www.utracks.com/croppedImages/Utracks/Camino/camino-hero-2408724-1920px-16x7.jpg',
+  boat:    'https://www.utracks.com/croppedImages/Utracks/Bike-Boat/bike-boat-hero-2408726-1920px-16x7.jpg',
+  alpine:  'https://www.utracks.com/croppedImages/Utracks/Alpine/alpine-hero-2408728-1920px-16x7.jpg',
+};
+
+var activeFilter = 'all';
+var activeId = null;
+var layers = {};
+
+var map = L.map('map', {zoomControl:true}).setView([48.0, 8.0], 4);
+setTimeout(function(){map.invalidateSize();}, 300);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom:19
+}).addTo(map);
+
+function getMainType(d) {
+  return Array.isArray(d.types) ? d.types[0] : d.types;
+}
+
+function pinColor(d) {
+  return TYPE_COLOR[getMainType(d)] || ORANGE;
+}
+
+function makeIcon(col, sz, border) {
+  return L.divIcon({
+    className:'',
+    html:'<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:'+(border||2.5)+'px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+    iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]
+  });
+}
+
+function isVisible(d) {
+  if (activeFilter === 'all') return true;
+  return Array.isArray(d.types) ? d.types.indexOf(activeFilter) > -1 : d.types === activeFilter;
+}
+
+destinations.forEach(function(d) {
+  var col = pinColor(d);
+  var m = L.marker([d.lat, d.lng], {icon: makeIcon(col, 14, 2)}).addTo(map);
+  m.bindTooltip(d.name, {permanent:false, direction:'top', className:'route-tooltip', offset:[0,-8], sticky:false});
+  m.on('click', function() { openPanel(d); });
+  layers[d.id] = {marker: m};
+});
+
+// Filter buttons
+document.querySelectorAll('.filter-btn[data-f]').forEach(function(b) {
+  b.addEventListener('click', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    activeFilter = b.getAttribute('data-f');
+    document.querySelectorAll('.filter-btn[data-f]').forEach(function(x) {
+      x.classList.toggle('active', x.getAttribute('data-f') === activeFilter);
+    });
+    destinations.forEach(function(d) {
+      var v = isVisible(d);
+      layers[d.id].marker.setIcon(makeIcon(v ? pinColor(d) : MUTED, v ? 14 : 10, 2));
+      layers[d.id].marker.setOpacity(v ? 1 : 0.25);
+    });
+  });
+});
+
+function metaItem(l, v) {
+  return '<div class="meta-item"><div class="meta-label">'+l+'</div><div class="meta-value">'+v+'</div></div>';
+}
+
+function openPanel(d) {
+  activeId = d.id;
+
+  // Update markers
+  destinations.forEach(function(x) {
+    var active = x.id === d.id;
+    var v = isVisible(x);
+    layers[x.id].marker.setIcon(makeIcon(active ? pinColor(x) : (v ? pinColor(x) : MUTED), active ? 20 : (v ? 14 : 10), active ? 3 : 2));
+    layers[x.id].marker.setOpacity(active ? 1 : (v ? 0.4 : 0.15));
+  });
+
+  // Hero image — try destination photo, fall back gracefully
+  var hero = document.getElementById('d-hero');
+  var ex = hero.querySelector('img'); if (ex) ex.remove();
+  var img = document.createElement('img');
+  img.alt = d.name;
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+  var mainType = getMainType(d);
+  img.src = PHOTOS[d.id] || FALLBACKS[mainType] || '';
+  img.onerror = function() { this.style.display='none'; hero.style.background='#e8f4f0'; };
+  hero.insertBefore(img, hero.firstChild);
+
+  // Click hero to go to hub
+  if (d.hub) {
+    hero.style.cursor = 'pointer';
+    hero.onclick = function() { window.open(d.hub, '_blank'); };
+  } else {
+    hero.style.cursor = 'default';
+    hero.onclick = null;
+  }
+
+  // Title
+  document.getElementById('d-title').innerHTML = d.hub
+    ? '<a href="'+d.hub+'" target="_blank" rel="noopener">'+d.name+'</a>'
+    : d.name;
+
+  // Tags
+  var tagsHtml = '';
+  var typesArr = Array.isArray(d.types) ? d.types : [d.types];
+  typesArr.forEach(function(t) {
+    tagsHtml += '<span class="tag '+TYPE_TAG[t]+'">'+TYPE_EMOJI[t]+' '+TYPE_LABEL[t]+'</span>';
+  });
+  document.getElementById('d-tags').innerHTML = tagsHtml;
+
+  // Meta
+  var tourCount = d.tours ? d.tours.length : 0;
+  var meta = metaItem('Country', d.country) + metaItem('Tours', tourCount);
+  document.getElementById('d-meta').innerHTML = meta;
+
+  // Desc
+  document.getElementById('d-desc').textContent = d.desc;
+
+  // Tours list — group by type if multi-type
+  var itinsEl = document.getElementById('d-itins');
+  var headingEl = document.getElementById('d-tours-heading');
+  headingEl.textContent = 'Tours (' + tourCount + ')';
+
+  if (d.tours && d.tours.length > 0) {
+    headingEl.style.display = 'block';
+    itinsEl.innerHTML = d.tours.map(function(t) {
+      var col = TYPE_COLOR[t.t] || ORANGE;
+      var emoji = TYPE_EMOJI[t.t] || '';
+      return '<a class="itinerary-item" href="'+t.u+'" target="_blank" rel="noopener">'
+        + '<span class="itin-name">'+t.n+'</span>'
+        + '<span style="font-size:13px;color:'+col+';flex-shrink:0;margin-left:6px">'+emoji+'</span>'
+        + '<span class="itin-arrow">›</span>'
+        + '</a>';
+    }).join('');
+  } else {
+    headingEl.style.display = 'none';
+    itinsEl.innerHTML = '';
+  }
+
+  // CTA
+  document.getElementById('d-cta').innerHTML = d.hub
+    ? '<a class="cta-btn" href="'+d.hub+'" target="_blank" rel="noopener">Explore all tours →</a>'
+    : '';
+
+  // Show panel
+  document.getElementById('panel-default').style.display = 'none';
+  var det = document.getElementById('panel-detail');
+  det.style.display = 'flex'; det.classList.add('active');
+  document.getElementById('panel').classList.add('mobile-open');
+  det.scrollTop = 0;
+
+  // Zoom
+  var zoom = d.types && d.types.indexOf('camino') > -1 ? 7 : Math.max(map.getZoom(), 6);
+  map.setView([d.lat, d.lng], zoom, {animate: true});
+}
+
+function closePanel() {
+  activeId = null;
+  destinations.forEach(function(d) {
+    var v = isVisible(d);
+    layers[d.id].marker.setIcon(makeIcon(v ? pinColor(d) : MUTED, v ? 14 : 10, 2));
+    layers[d.id].marker.setOpacity(v ? 1 : 0.25);
+  });
+  document.getElementById('panel-default').style.display = '';
+  var det = document.getElementById('panel-detail');
+  det.style.display = 'none'; det.classList.remove('active');
+  document.getElementById('panel').classList.remove('mobile-open');
+  map.setView([48.0, 8.0], 4, {animate: true});
+}
+
+map.on('click', function() {
+  if (window.innerWidth <= 600 && document.getElementById('panel').classList.contains('mobile-open')) closePanel();
+});
+
+document.getElementById('btn-fullscreen').addEventListener('mousedown', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  var w = document.getElementById('map-wrapper');
+  var isFs = w.classList.toggle('fullscreen');
+  this.textContent = isFs ? '✕ Exit' : '⛶ Expand';
+  map.invalidateSize();
+});
+</script>
